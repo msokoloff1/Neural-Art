@@ -3,10 +3,10 @@ import numpy as np
 import transfer as t
 
 def mse(preds, correct):
-    tf.reduce_mean()
+    tf.reduce_sum(tf.pow(pred - Y, 2)) / (2 * n_samples)
 
 def euclidean(preds, correct):
-    return tf.sqrt(tf.reduce_mean(tf.square(tf.sub(preds, correct))))
+    return tf.sqrt(tf.reduce_sum(tf.square(tf.sub(preds, correct))))*(0.5)
 
 
 def createNoiseImage(shape=(1,224,224,3)):
@@ -17,7 +17,11 @@ def loadImage(path, display=False):
     if(display):
         showImage(subjectImage)
 
+    return subjectImage
 
-def showImage():
-    img = Image.fromarray((subjectImage * 255).astype('uint8'), 'RGB')
+
+def showImage(image):
+    if(np.max(image)<1):
+        image = image*255
+    img = Image.fromarray((image).astype('uint8'), 'RGB')
     img.show()

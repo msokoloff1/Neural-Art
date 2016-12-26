@@ -18,8 +18,14 @@ errorMetricStyle   = utils.mse #utils.euclidean
 normalizeContent   = True #Inversion paper says to use this
 normalizeStyle     = False #No mention of style in inversion paper
 imageShape         = (224,224,3)
-
+#TODO : Add a real value for sigma. Should be the average euclidean norm of the vgg training images. This also requires an option for the model to change whether or not sigma is multipled by the input image
+sigma = 1
+Beta = 2
+Alpha = 6
+a = 0.01
+B = 128 #Pixel min/max encourages pixels to be in the range of [-B, +B]
 sess = tf.Session()
+
 ##################
 
 
@@ -35,8 +41,7 @@ with tf.Session() as sess:
 
 
 
-
-def buildStyleLoss(lossLayer, correctAnswers):
+def buildStyleLoss():
     totalStyleLoss = []
     for index, styleLayer in enumerate(styleLayers):
         normalizingConstant = 1
@@ -72,5 +77,24 @@ def buildContentLoss(correctAnswer=contentData):
     return (eval('errorMetricContent(model.'+contentLayer+', correctAnswer)')/normalizingConstant)
 
 
+#def buildAlphaNorm():
+#TODO:Build alpha norm function
+
+def buildTVNorm(inputNoiseImageVar):
+    #TODO: Implement shiftDown and shiftRight
+    yPlusOne = tf.shiftDown(inputNoiseImageVar)
+    xPlusOne = tf.shiftRight(inputNoiseImageVar)
+
+    lambdaBeta = (sigma**Beta) / (imageShape[0]*imageShape[1]*((a*B)**Beta))
+    return lambdaBeta*tf.reduce_sum( tf.pow((tf.square(yPlusOne-inputNoiseImageVar)+tf.square(xPlusOne-inputNoiseImageVar)),(Beta/2) ))
 
 
+
+
+model = net.Vgg19()
+inputVar = tf.Variable(utils.createNoiseImage(imageShape))
+model.build()
+
+# Example : buildTVNorm(inputVar)
+
+#def totalLoss():
