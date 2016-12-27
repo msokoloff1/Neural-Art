@@ -1,5 +1,8 @@
-
+import inspect
+import numpy as np
+import os
 import tensorflow as tf
+import time
 sess = tf.InteractiveSession()
 VGG_MEAN = [103.939, 116.779, 123.68]
 
@@ -31,14 +34,14 @@ class Vgg19:
         assert red.get_shape().as_list()[1:] == [224, 224, 1]
         assert green.get_shape().as_list()[1:] == [224, 224, 1]
         assert blue.get_shape().as_list()[1:] == [224, 224, 1]
-        bgr = tf.concat(3, [
+        self.bgr = tf.concat(3, [
             blue - VGG_MEAN[0],
             green - VGG_MEAN[1],
             red - VGG_MEAN[2],
         ])
-        assert bgr.get_shape().as_list()[1:] == [224, 224, 3]
+        assert self.bgr.get_shape().as_list()[1:] == [224, 224, 3]
 
-        self.conv1_1 = self.conv_layer(bgr, "conv1_1")
+        self.conv1_1 = self.conv_layer(self.bgr, "conv1_1")
         self.conv1_2 = self.conv_layer(self.conv1_1, "conv1_2")
         self.pool1 = self.avg_pool(self.conv1_2, 'pool1')
 

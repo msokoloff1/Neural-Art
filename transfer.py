@@ -3,6 +3,7 @@ import net
 import utilities as utils
 import tensorflow as tf
 from functools import reduce
+import numpy as np
 ###########################
 
 ##Global Options##
@@ -24,7 +25,6 @@ beta = 2.0
 alpha = 6.0
 a = 0.01
 B = 128.0 #Pixel min/max encourages pixels to be in the range of [-B, +B]
-sess = tf.Session()
 
 alphaNormLossWeight = 1.0
 TVNormLossWeight    = 1.0
@@ -39,16 +39,14 @@ printEveryN   = 10
 
 
 with tf.Session() as sess:
-    inputTensor = tf.placeholder(tf.float32, shape=[None, imageShape[0], imageShape[1], imageShape[2]])
-    contentImage = utils.loadImage(contentPath)
-    styleImage = utils.loadImage(stylePath)
+    inputTensor = tf.placeholder(tf.float32, shape=[None,imageShape[0], imageShape[1], imageShape[2]])
+    contentImage = np.array(utils.loadImage(contentPath))
+    styleImage = utils.loadImage(stylePath).reshape(1,224,224,3)
     model =net.Vgg19()
     model.build(inputTensor)
     contentData = eval('sess.run(model.' + contentLayer + ',feed_dict={inputTensor:contentImage})')
     for styleLayer in styleLayers:
-        styleData[styleLayer] = eval('sess.run(model.' + styleLayer + ',feed_dict={inputTensor:styleImage})')
-
-
+        styleData[styleLayer] = np.array(eval('sess.run(model.' + styleLayer + ',feed_dict={inputTensor:styleImage})'))
 
 
 
@@ -60,51 +58,64 @@ def buildStyleLoss(model):
         if (normalizeStyle):
             normalizingConstant = (reduce(lambda x, y: x + y, (styleData[styleLayer] ** 2)) ** (0.5))
 
+        styleLayerVar = tf.Variable(styleData[styleLayer])
+        correctGrams  = buildGramMatrix(styleLayerVar)
+        tensorGrams   = buildGramMatrix(eval('model.'+styleLayer))
+        _, dimX, dimY, num_filters = styleLayerVar.get_shape()
+        denominator   =(2*normalizingConstant)*((float(int(dimX))*float(int(dimY)))**2)*(float(int(num_filters))**2)
+        error         = tf.reduce_sum(errorMetricStyle(tensorGrams, correctGrams))
+        totalStyleLoss.append((tf.div(error,denominator)))
 
-        correctGrams = buildGramMatrix(styleData[styleLayer])
-        tensorGrams  = buildGramMatrix(eval('model.'+styleLayer))
-        _, dimX, dimY, num_filters = tensorGrams.get_shape()
-        denominator  =(2*normalizingConstant)*((dimX*dimY)**2)*(num_filters**2)
-        error        = tf.reduce_sum(errorMetricStyle(tensorGrams, correctGrams))
-        totalStyleLoss.append((error/denominator))
 
-    return (reduce(lambda x,y: x+y,totalStyleLoss))
+    #styleLoss = (reduce(lambda x, y: x + y, totalStyleLoss))
+    styleLoss = tf.reduce_sum(totalStyleLoss)
+    print("Style Loss :")
+    print(styleLoss)
+    return styleLoss
 
 
 def buildGramMatrix(layer):
     _, dimX, dimY, num_filters = layer.get_shape()
-    vectorized_maps = tf.reshape(layer, [dimX * dimY, num_filters])
+    vectorized_maps = tf.reshape(layer, [int(dimX) * int(dimY), int(num_filters)])
 
-    if dimX * dimY > num_filters:
+    if int(dimX) * int(dimY) > int(num_filters):
         return tf.matmul(vectorized_maps, vectorized_maps, transpose_a=True)
     else:
         return tf.matmul(vectorized_maps, vectorized_maps, transpose_b=True)
 
 
 def buildContentLoss(model, correctAnswer=contentData):
+
     normalizingConstant = 1
     if(normalizeContent):
 
         ##TODO: THIS MIGHT NOT WORK BECAUSE WE ARE TRYING TO REDUCE A NUMPY ARRAY!!! USE NUMPY REDUCE FUNCTIONS!!!!!!!
         normalizingConstant = (reduce(lambda x,y: x+y,(correctAnswer**2))**(0.5))
 
-    return (eval('errorMetricContent(model.'+contentLayer+', correctAnswer)')/normalizingConstant)
+    contentLoss = (eval('errorMetricContent(model.' + contentLayer + ', correctAnswer)') / normalizingConstant)
+    return contentLoss
 
 
 def buildAlphaNorm(model):
     adjustedImage = model.bgr
-    return tf.reduce_sum(tf.pow(model.bgr, alpha))
+    return tf.reduce_sum(tf.pow(adjustedImage, alpha))
 
 
 
 def buildTVNorm(model):
     adjustedImage = model.bgr
 
-    yPlusOne = tf.slice(adjustedImage, [0,1,0], [imageShape[0],imageShape[1],imageShape[2]])
-    xPlusOne = tf.slice(adjustedImage, [1,0,0], [imageShape[0],imageShape[1],imageShape[2]])
 
-    inputNoiseYadj = tf.slice(adjustedImage,[0,0,0],[imageShape[0],(imageShape[1]-1),imageShape[2]])
-    inputNoiseXadj = tf.slice(adjustedImage, [0,0,0], [(imageShape[0]-1),imageShape[1],imageShape[2]])
+    yPlusOne = tf.slice(adjustedImage, [0,0,1,0], [1,imageShape[0],(imageShape[1]-1),imageShape[2]])
+    xPlusOne = tf.slice(adjustedImage, [0,1,0,0], [1,(imageShape[0]-1),imageShape[1],imageShape[2]])
+
+    inputNoiseYadj = tf.slice(adjustedImage,[0,0,0,0],[1,imageShape[0],(imageShape[1]-1),imageShape[2]])
+    inputNoiseXadj = tf.slice(adjustedImage, [0,0,0,0], [1,(imageShape[0]-1),imageShape[1],imageShape[2]])
+
+    print(yPlusOne.get_shape())
+    print(xPlusOne.get_shape())
+    print(inputNoiseYadj.get_shape())
+    print(inputNoiseXadj.get_shape())
 
     lambdaBeta = (sigma**beta) / (imageShape[0]*imageShape[1]*((a*B)**beta))
     return lambdaBeta*tf.reduce_sum( tf.pow((tf.square(yPlusOne-inputNoiseYadj)+tf.square(xPlusOne-inputNoiseXadj)),(Beta/2) ))
@@ -113,12 +124,19 @@ def buildTVNorm(model):
 
 
 def totalLoss(model):
-    errorComponents = [buildAlphaNorm(model), buildTVNorm(model), buildStyleLoss(model), buildContentLoss(model)]
-    LossWeights = [alphaNormLossWeight, TVNormLossWeight, styleLossWeight, contentLossWeight]
+    #errorComponents = [buildAlphaNorm(model), buildTVNorm(model), buildStyleLoss(model), buildContentLoss(model)]
+    #LossWeights = [alphaNormLossWeight, TVNormLossWeight, styleLossWeight, contentLossWeight]
+#PROBLEM buildTVNorm
+    errorComponents = [buildStyleLoss(model), buildContentLoss(model)]
+    LossWeights = [styleLossWeight, contentLossWeight]
     loss =[]
     for error, weights in zip(errorComponents, LossWeights):
-        loss.append(error*loss)
-
+        print("+++++++++++++")
+        print(error)
+        print(weights)
+        print("+++++++++++++")
+        #loss.append(error*loss)
+    print("exited..")
     return reduce(lambda x,y: x+y, loss)
 
 def getUpdateTensor(model, inputVar):
@@ -129,19 +147,21 @@ def getUpdateTensor(model, inputVar):
     return optimizer.apply_gradients(clipped_grads)
 
 
-def train(model, inputVar):
+def train(model, inputVar, sess):
     updateTensor = getUpdateTensor(model, inputVar)
+    sess.run(tf.initialize_all_variables())
     for iteration in range(numIters):
         sess.run(updateTensor)
         if(iteration%printEveryN==0):
             img = inputVar.eval()
-            utils.showImage(img)
+            #utils.showImage(img)
 
 
 
 
-model = net.Vgg19()
-inputVar = tf.Variable(utils.createNoiseImage(imageShape))
-model.build()
-train(model, inputVar)
+with tf.Session() as sess:
+    model = net.Vgg19()
+    inputVar = tf.Variable(utils.createNoiseImage(imageShape))
+    model.build(tf.reshape(inputVar,[1,224,224,3]))
+    train(model, inputVar, sess)
 
