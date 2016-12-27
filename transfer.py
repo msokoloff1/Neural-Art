@@ -19,13 +19,22 @@ normalizeContent   = True #Inversion paper says to use this
 normalizeStyle     = False #No mention of style in inversion paper
 imageShape         = (224,224,3)
 #TODO : Add a real value for sigma. Should be the average euclidean norm of the vgg training images. This also requires an option for the model to change whether or not sigma is multipled by the input image
-sigma = 1
-Beta = 2
-Alpha = 6
+sigma = 1.0 #<- if sigma is one then it doesnt need to be included in the vgg net (because the multiplicative identity)
+beta = 2.0
+alpha = 6.0
 a = 0.01
-B = 128 #Pixel min/max encourages pixels to be in the range of [-B, +B]
+B = 128.0 #Pixel min/max encourages pixels to be in the range of [-B, +B]
 sess = tf.Session()
 
+alphaNormLossWeight = 1.0
+TVNormLossWeight    = 1.0
+styleLossWeight     = 1.0
+contentLossWeight   = 1.0
+
+
+learningRate  = 1.0
+numIters      = 100
+printEveryN   = 10
 ##################
 
 
@@ -41,7 +50,10 @@ with tf.Session() as sess:
 
 
 
-def buildStyleLoss():
+
+
+
+def buildStyleLoss(model):
     totalStyleLoss = []
     for index, styleLayer in enumerate(styleLayers):
         normalizingConstant = 1
@@ -69,24 +81,61 @@ def buildGramMatrix(layer):
         return tf.matmul(vectorized_maps, vectorized_maps, transpose_b=True)
 
 
-def buildContentLoss(correctAnswer=contentData):
+def buildContentLoss(model, correctAnswer=contentData):
     normalizingConstant = 1
     if(normalizeContent):
+
+        ##TODO: THIS MIGHT NOT WORK BECAUSE WE ARE TRYING TO REDUCE A NUMPY ARRAY!!! USE NUMPY REDUCE FUNCTIONS!!!!!!!
         normalizingConstant = (reduce(lambda x,y: x+y,(correctAnswer**2))**(0.5))
 
     return (eval('errorMetricContent(model.'+contentLayer+', correctAnswer)')/normalizingConstant)
 
 
-#def buildAlphaNorm():
-#TODO:Build alpha norm function
+def buildAlphaNorm(model):
+    adjustedImage = model.bgr
+    return tf.reduce_sum(tf.pow(model.bgr, alpha))
 
-def buildTVNorm(inputNoiseImageVar):
-    #TODO: Implement shiftDown and shiftRight
-    yPlusOne = tf.shiftDown(inputNoiseImageVar)
-    xPlusOne = tf.shiftRight(inputNoiseImageVar)
 
-    lambdaBeta = (sigma**Beta) / (imageShape[0]*imageShape[1]*((a*B)**Beta))
-    return lambdaBeta*tf.reduce_sum( tf.pow((tf.square(yPlusOne-inputNoiseImageVar)+tf.square(xPlusOne-inputNoiseImageVar)),(Beta/2) ))
+
+def buildTVNorm(model):
+    adjustedImage = model.bgr
+
+    yPlusOne = tf.slice(adjustedImage, [0,1,0], [imageShape[0],imageShape[1],imageShape[2]])
+    xPlusOne = tf.slice(adjustedImage, [1,0,0], [imageShape[0],imageShape[1],imageShape[2]])
+
+    inputNoiseYadj = tf.slice(adjustedImage,[0,0,0],[imageShape[0],(imageShape[1]-1),imageShape[2]])
+    inputNoiseXadj = tf.slice(adjustedImage, [0,0,0], [(imageShape[0]-1),imageShape[1],imageShape[2]])
+
+    lambdaBeta = (sigma**beta) / (imageShape[0]*imageShape[1]*((a*B)**beta))
+    return lambdaBeta*tf.reduce_sum( tf.pow((tf.square(yPlusOne-inputNoiseYadj)+tf.square(xPlusOne-inputNoiseXadj)),(Beta/2) ))
+
+
+
+
+def totalLoss(model):
+    errorComponents = [buildAlphaNorm(model), buildTVNorm(model), buildStyleLoss(model), buildContentLoss(model)]
+    LossWeights = [alphaNormLossWeight, TVNormLossWeight, styleLossWeight, contentLossWeight]
+    loss =[]
+    for error, weights in zip(errorComponents, LossWeights):
+        loss.append(error*loss)
+
+    return reduce(lambda x,y: x+y, loss)
+
+def getUpdateTensor(model, inputVar):
+    loss = totalLoss(model)
+    optimizer = tf.train.AdamOptimizer(learningRate)
+    grads = optimizer.compute_gradients(loss, [inputVar])
+    clipped_grads = [(tf.clip_by_value(grad, -5.0, 5.0), var) for grad, var in grads]
+    return optimizer.apply_gradients(clipped_grads)
+
+
+def train(model, inputVar):
+    updateTensor = getUpdateTensor(model, inputVar)
+    for iteration in range(numIters):
+        sess.run(updateTensor)
+        if(iteration%printEveryN==0):
+            img = inputVar.eval()
+            utils.showImage(img)
 
 
 
@@ -94,7 +143,5 @@ def buildTVNorm(inputNoiseImageVar):
 model = net.Vgg19()
 inputVar = tf.Variable(utils.createNoiseImage(imageShape))
 model.build()
+train(model, inputVar)
 
-# Example : buildTVNorm(inputVar)
-
-#def totalLoss():
