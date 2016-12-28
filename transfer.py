@@ -28,13 +28,13 @@ B = 128.0 #Pixel min/max encourages pixels to be in the range of [-B, +B]
 
 alphaNormLossWeight = 1.0
 TVNormLossWeight    = 1.0
-styleLossWeight     = 1.0
-contentLossWeight   = 1.0
+styleLossWeight     = 0.0001
+contentLossWeight   = 0.1
 
 
-learningRate  = 1.0
-numIters      = 100
-printEveryN   = 10
+learningRate  = 0.05
+numIters      = 500
+printEveryN   = 50
 ##################
 
 
@@ -69,8 +69,6 @@ def buildStyleLoss(model):
 
     #styleLoss = (reduce(lambda x, y: x + y, totalStyleLoss))
     styleLoss = tf.reduce_sum(totalStyleLoss)
-    print("Style Loss :")
-    print(styleLoss)
     return styleLoss
 
 
@@ -90,10 +88,11 @@ def buildContentLoss(model, correctAnswer=contentData):
     if(normalizeContent):
 
         ##TODO: THIS MIGHT NOT WORK BECAUSE WE ARE TRYING TO REDUCE A NUMPY ARRAY!!! USE NUMPY REDUCE FUNCTIONS!!!!!!!
-        normalizingConstant = (reduce(lambda x,y: x+y,(correctAnswer**2))**(0.5))
+        normalizingConstant = np.sum(  (correctAnswer**2))**(0.5)
 
+    print("Normalizing Constant : %g"%(normalizingConstant))
     contentLoss = (eval('errorMetricContent(model.' + contentLayer + ', correctAnswer)') / normalizingConstant)
-    return contentLoss
+    return tf.reduce_sum(contentLoss)
 
 
 def buildAlphaNorm(model):
@@ -127,36 +126,36 @@ def totalLoss(model):
     #errorComponents = [buildAlphaNorm(model), buildTVNorm(model), buildStyleLoss(model), buildContentLoss(model)]
     #LossWeights = [alphaNormLossWeight, TVNormLossWeight, styleLossWeight, contentLossWeight]
 #PROBLEM buildTVNorm
-    errorComponents = [buildStyleLoss(model), buildContentLoss(model)]
+    errorComponents =[buildStyleLoss(model), buildContentLoss(model)]
     LossWeights = [styleLossWeight, contentLossWeight]
     loss =[]
     for error, weights in zip(errorComponents, LossWeights):
-        print("+++++++++++++")
-        print(error)
-        print(weights)
-        print("+++++++++++++")
-        #loss.append(error*loss)
-    print("exited..")
-    return reduce(lambda x,y: x+y, loss)
+        loss.append(error*weights)
+
+    reducedLoss = reduce(lambda x,y: x+y, loss)
+    return reducedLoss
 
 def getUpdateTensor(model, inputVar):
     loss = totalLoss(model)
+    print(loss.get_shape())
     optimizer = tf.train.AdamOptimizer(learningRate)
     grads = optimizer.compute_gradients(loss, [inputVar])
     clipped_grads = [(tf.clip_by_value(grad, -5.0, 5.0), var) for grad, var in grads]
-    return optimizer.apply_gradients(clipped_grads)
+    return [optimizer.apply_gradients(clipped_grads), loss]
 
 
 def train(model, inputVar, sess):
-    updateTensor = getUpdateTensor(model, inputVar)
+    updateTensor, lossTensor = getUpdateTensor(model, inputVar)
     sess.run(tf.initialize_all_variables())
+
     for iteration in range(numIters):
         sess.run(updateTensor)
         if(iteration%printEveryN==0):
             img = inputVar.eval()
-            #utils.showImage(img)
-
-
+            print("Iteration : %g | Loss : %g"%(iteration, lossTensor.eval()))
+            utils.showImage(img)
+        elif(iteration%10==0):
+            print("Iteration : %g | Loss : %g" % (iteration, lossTensor.eval()))
 
 
 with tf.Session() as sess:

@@ -24,7 +24,6 @@ def loadImage(path, display=False):
 
 
 def showImage(image):
-    if(np.max(image)<1):
-        image = image*255
-    img = Image.fromarray((image).astype('uint8'), 'RGB')
+    img = np.clip(image,0, 1)*255
+    img = Image.fromarray((img).astype('uint8'), 'RGB')
     img.show()
