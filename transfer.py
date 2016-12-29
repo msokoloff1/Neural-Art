@@ -4,11 +4,12 @@ import utilities as utils
 import tensorflow as tf
 from functools import reduce
 import numpy as np
+import time
 ###########################
 
 ##Global Options##
-contentPath        = '/Users/matthewsokoloff/Downloads/photo.jpg'
-stylePath          = '/Users/matthewsokoloff/Downloads/art.jpg'
+contentPath        = '../neural_art/content.jpg'
+stylePath          = '../neural_art/style.jpg'
 contentLayer       = 'conv4_2'
 styleLayers        = ['conv1_1','conv2_1','conv3_1', 'conv4_1', 'conv5_1']
 styleWeights       = [0.2      ,0.2      , 0.2     , 0.2      , 0.2      ]
@@ -18,7 +19,7 @@ errorMetricContent = utils.mse #utils.euclidean
 errorMetricStyle   = utils.mse #utils.euclidean
 normalizeContent   = True #Inversion paper says to use this
 normalizeStyle     = False #No mention of style in inversion paper
-imageShape         = (224,224,3)
+imageShape         = (1920,1080,3)
 #TODO : Add a real value for sigma. Should be the average euclidean norm of the vgg training images. This also requires an option for the model to change whether or not sigma is multipled by the input image
 sigma = 1.0 #<- if sigma is one then it doesnt need to be included in the vgg net (because the multiplicative identity)
 beta = 2.0
@@ -33,17 +34,17 @@ contentLossWeight   = 0.1
 
 
 learningRate  = 0.05
-numIters      = 500
-printEveryN   = 50
+numIters      = 51
+showEveryN   = 50
 ##################
 
 
 with tf.Session() as sess:
     inputTensor = tf.placeholder(tf.float32, shape=[None,imageShape[0], imageShape[1], imageShape[2]])
-    contentImage = np.array(utils.loadImage(contentPath))
-    styleImage = utils.loadImage(stylePath).reshape(1,224,224,3)
+    contentImage = np.array(utils.loadImage(contentPath, imageShape))
+    styleImage = utils.loadImage(stylePath, imageShape)
     model =net.Vgg19()
-    model.build(inputTensor)
+    model.build(inputTensor, imageShape)
     contentData = eval('sess.run(model.' + contentLayer + ',feed_dict={inputTensor:contentImage})')
     for styleLayer in styleLayers:
         styleData[styleLayer] = np.array(eval('sess.run(model.' + styleLayer + ',feed_dict={inputTensor:styleImage})'))
@@ -87,7 +88,6 @@ def buildContentLoss(model, correctAnswer=contentData):
     normalizingConstant = 1
     if(normalizeContent):
 
-        ##TODO: THIS MIGHT NOT WORK BECAUSE WE ARE TRYING TO REDUCE A NUMPY ARRAY!!! USE NUMPY REDUCE FUNCTIONS!!!!!!!
         normalizingConstant = np.sum(  (correctAnswer**2))**(0.5)
 
     print("Normalizing Constant : %g"%(normalizingConstant))
@@ -117,8 +117,13 @@ def buildTVNorm(model):
     print(inputNoiseXadj.get_shape())
 
     lambdaBeta = (sigma**beta) / (imageShape[0]*imageShape[1]*((a*B)**beta))
-    return lambdaBeta*tf.reduce_sum( tf.pow((tf.square(yPlusOne-inputNoiseYadj)+tf.square(xPlusOne-inputNoiseXadj)),(Beta/2) ))
+    error1 = tf.square(yPlusOne-inputNoiseYadj)
+    error2 = tf.square(xPlusOne-inputNoiseXadj)
 
+    print(error1.get_shape())
+    print(error2.get_shape())
+
+    return lambdaBeta*tf.reduce_sum( tf.pow((error1+error2),(Beta/2) ))
 
 
 
@@ -126,8 +131,8 @@ def totalLoss(model):
     #errorComponents = [buildAlphaNorm(model), buildTVNorm(model), buildStyleLoss(model), buildContentLoss(model)]
     #LossWeights = [alphaNormLossWeight, TVNormLossWeight, styleLossWeight, contentLossWeight]
 #PROBLEM buildTVNorm
-    errorComponents =[buildStyleLoss(model), buildContentLoss(model)]
-    LossWeights = [styleLossWeight, contentLossWeight]
+    errorComponents =[buildStyleLoss(model), buildContentLoss(model)]#buildTVNorm(model)]
+    LossWeights = [styleLossWeight, contentLossWeight] #]TVNormLossWeight]
     loss =[]
     for error, weights in zip(errorComponents, LossWeights):
         loss.append(error*weights)
@@ -147,20 +152,25 @@ def getUpdateTensor(model, inputVar):
 def train(model, inputVar, sess):
     updateTensor, lossTensor = getUpdateTensor(model, inputVar)
     sess.run(tf.initialize_all_variables())
+    start_time = time.time()
 
     for iteration in range(numIters):
         sess.run(updateTensor)
-        if(iteration%printEveryN==0):
+        if(iteration%showEveryN==0):
             img = inputVar.eval()
-            print("Iteration : %g | Loss : %g"%(iteration, lossTensor.eval()))
-            utils.showImage(img)
+            print("Iteration : %s | Loss : %g"%(str(iteration).zfill(4), lossTensor.eval()))
+            utils.showImage(img,imageShape)
         elif(iteration%10==0):
-            print("Iteration : %g | Loss : %g" % (iteration, lossTensor.eval()))
+            print("Iteration : %s | Loss : %g" % (str(iteration).zfill(4), lossTensor.eval()))
+
+    elapsed = time.time() -start_time
+    print("Experiment Took : %s"%(str(elapsed)))
+
 
 
 with tf.Session() as sess:
     model = net.Vgg19()
-    inputVar = tf.Variable(utils.createNoiseImage(imageShape))
-    model.build(tf.reshape(inputVar,[1,224,224,3]))
+    inputVar = tf.Variable(tf.random_uniform((1,)+imageShape, minval=0, maxval=1))
+    model.build(inputVar, imageShape)
     train(model, inputVar, sess)
 

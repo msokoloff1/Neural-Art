@@ -12,18 +12,17 @@ def euclidean(preds, correct):
     return tf.sqrt(tf.reduce_sum(tf.square(tf.sub(preds, correct))))*(0.5)
 
 
-def createNoiseImage(shape=(1,224,224,3)):
-    return np.random.random_sample(shape).astype('float32')
 
-def loadImage(path, display=False):
-    subjectImage = misc.imresize(misc.imread(path), (224,224,3)) / 255
+
+def loadImage(path, imageShape, display=False):
+    subjectImage = misc.imresize(misc.imread(path), imageShape) / 255
     if(display):
-        showImage(subjectImage)
+        showImage(subjectImage, imageShape)
+    reshaped = (1,) + imageShape
+    return subjectImage.reshape(reshaped)
 
-    return subjectImage.reshape(1,224,224,3)
 
-
-def showImage(image):
+def showImage(image, shape):
     img = np.clip(image,0, 1)*255
-    img = Image.fromarray((img).astype('uint8'), 'RGB')
+    img = Image.fromarray((img.reshape(shape)).astype('uint8'), 'RGB')
     img.show()
