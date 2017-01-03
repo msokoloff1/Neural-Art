@@ -8,34 +8,34 @@ import time
 ###########################
 
 ##Global Options##
-contentPath        = '../neural_art/content.jpg'
-stylePath          = '../neural_art/style.jpg'
+contentPath        = '../neural_art/images/testingContent.jpg'
+stylePath          = '../neural_art/images/testingArt.jpg'
 contentLayer       = 'conv4_2'
 styleLayers        = ['conv1_1','conv2_1','conv3_1', 'conv4_1', 'conv5_1']
 styleWeights       = [0.2      ,0.2      , 0.2     , 0.2      , 0.2      ]
 styleData          = {}
+styleBalanceData   = {}
 contentData        = None
 errorMetricContent = utils.mse #utils.euclidean
-errorMetricStyle   = utils.mse #utils.euclidean
+errorMetricStyle   = utils.mse
 normalizeContent   = True #Inversion paper says to use this
 normalizeStyle     = False #No mention of style in inversion paper
-imageShape         = (1920,1080,3)
+imageShape         = (int(720/2),int(1280/2),3)
 #TODO : Add a real value for sigma. Should be the average euclidean norm of the vgg training images. This also requires an option for the model to change whether or not sigma is multipled by the input image
 sigma = 1.0 #<- if sigma is one then it doesnt need to be included in the vgg net (because the multiplicative identity)
 beta = 2.0
 alpha = 6.0
 a = 0.01
-B = 128.0 #Pixel min/max encourages pixels to be in the range of [-B, +B]
+B = 120.0 #Pixel min/max encourages pixels to be in the range of [-B, +B]
 
-alphaNormLossWeight = 1.0
-TVNormLossWeight    = 1.0
+alphaNormLossWeight = 0.0001
+TVNormLossWeight    = 1.5
 styleLossWeight     = 0.0001
-contentLossWeight   = 0.1
+contentLossWeight   = 0.05
 
-
-learningRate  = 0.05
-numIters      = 51
-showEveryN   = 50
+learningRate  = 0.025
+numIters      = 501
+showEveryN   = 500
 ##################
 
 
@@ -43,11 +43,13 @@ with tf.Session() as sess:
     inputTensor = tf.placeholder(tf.float32, shape=[None,imageShape[0], imageShape[1], imageShape[2]])
     contentImage = np.array(utils.loadImage(contentPath, imageShape))
     styleImage = utils.loadImage(stylePath, imageShape)
+    styleBalanceImage = utils.loadImage(contentPath, imageShape)
     model =net.Vgg19()
     model.build(inputTensor, imageShape)
     contentData = eval('sess.run(model.' + contentLayer + ',feed_dict={inputTensor:contentImage})')
     for styleLayer in styleLayers:
         styleData[styleLayer] = np.array(eval('sess.run(model.' + styleLayer + ',feed_dict={inputTensor:styleImage})'))
+
 
 
 
@@ -111,19 +113,12 @@ def buildTVNorm(model):
     inputNoiseYadj = tf.slice(adjustedImage,[0,0,0,0],[1,imageShape[0],(imageShape[1]-1),imageShape[2]])
     inputNoiseXadj = tf.slice(adjustedImage, [0,0,0,0], [1,(imageShape[0]-1),imageShape[1],imageShape[2]])
 
-    print(yPlusOne.get_shape())
-    print(xPlusOne.get_shape())
-    print(inputNoiseYadj.get_shape())
-    print(inputNoiseXadj.get_shape())
 
     lambdaBeta = (sigma**beta) / (imageShape[0]*imageShape[1]*((a*B)**beta))
-    error1 = tf.square(yPlusOne-inputNoiseYadj)
-    error2 = tf.square(xPlusOne-inputNoiseXadj)
+    error1 = tf.slice(tf.square(yPlusOne-inputNoiseYadj), [0,0,0,0], [1,(imageShape[0]-1),(imageShape[1]-1), imageShape[2]])
+    error2 = tf.slice(tf.square(xPlusOne-inputNoiseXadj), [0,0,0,0], [1,(imageShape[0]-1),(imageShape[1]-1), imageShape[2]])
 
-    print(error1.get_shape())
-    print(error2.get_shape())
-
-    return lambdaBeta*tf.reduce_sum( tf.pow((error1+error2),(Beta/2) ))
+    return lambdaBeta*tf.reduce_sum( tf.pow((error1+error2),(beta/2) ))
 
 
 
@@ -131,8 +126,8 @@ def totalLoss(model):
     #errorComponents = [buildAlphaNorm(model), buildTVNorm(model), buildStyleLoss(model), buildContentLoss(model)]
     #LossWeights = [alphaNormLossWeight, TVNormLossWeight, styleLossWeight, contentLossWeight]
 #PROBLEM buildTVNorm
-    errorComponents =[buildStyleLoss(model), buildContentLoss(model)]#buildTVNorm(model)]
-    LossWeights = [styleLossWeight, contentLossWeight] #]TVNormLossWeight]
+    errorComponents =[buildStyleLoss(model), buildContentLoss(model), buildTVNorm(model)]
+    LossWeights = [styleLossWeight, contentLossWeight,TVNormLossWeight]
     loss =[]
     for error, weights in zip(errorComponents, LossWeights):
         loss.append(error*weights)
@@ -142,7 +137,7 @@ def totalLoss(model):
 
 def getUpdateTensor(model, inputVar):
     loss = totalLoss(model)
-    print(loss.get_shape())
+    #tf.contrib.opt.ScipyOptimizerInterface(loss, method='L-BFGS-B', options={'maxiter': 100}).minimize(session)    
     optimizer = tf.train.AdamOptimizer(learningRate)
     grads = optimizer.compute_gradients(loss, [inputVar])
     clipped_grads = [(tf.clip_by_value(grad, -5.0, 5.0), var) for grad, var in grads]
@@ -170,7 +165,8 @@ def train(model, inputVar, sess):
 
 with tf.Session() as sess:
     model = net.Vgg19()
-    inputVar = tf.Variable(tf.random_uniform((1,)+imageShape, minval=0, maxval=1))
+    inputVar = tf.Variable(tf.random_uniform((1,)+imageShape, minval=0.25, maxval=0.75))
     model.build(inputVar, imageShape)
     train(model, inputVar, sess)
-
+    #img =inputVar.eval()
+    #utils.showImage(img, imageShape)
