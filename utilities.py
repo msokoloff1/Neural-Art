@@ -22,7 +22,8 @@ def loadImage(path, imageShape, display=False):
     return subjectImage.reshape(reshaped)
 
 
-def showImage(image, shape):
+def showImage(image, shape,destDir, name):
     img = np.clip(image,0, 1)*255
     img = Image.fromarray((img.reshape(shape)).astype('uint8'), 'RGB')
     img.show()
+    img.save(destDir+"/"+name+".jpg", "JPEG")

@@ -5,14 +5,36 @@ import tensorflow as tf
 from functools import reduce
 import numpy as np
 import time
+import argparse
 ###########################
 
+
+
+
+parser = argparse.ArgumentParser(description='Parameters for the neural art algorithm')
+parser.add_argument('-save_path'         , default = './results'                                            , help = 'Path to directory containing images to be stylized')
+parser.add_argument('-train_iters'       , default = 1500, type=int                                         , help = 'Number of iterations for training operation')
+parser.add_argument('-style_image_path'  , default = 'images/style0.jpg'                                    , help = 'Image to copy style from')
+parser.add_argument('-content_image_path', default = 'images/content1.jpg'                                  , help = 'Image to copy content from')
+parser.add_argument('-style_layers'      , default = ['conv1_2','conv2_2','conv3_3', 'conv4_1', 'conv5_1']  , help = 'Which layers of the vgg network to be used for obtaining style statistics')
+parser.add_argument('-style_weights'     , default = [0.2      ,0.2     , 0.3     , 0.3       , 0.2      ]  , help = 'Weights for the loss between generator result and style image for each layer in the vgg network')
+parser.add_argument('-tvnorm_weight'     , default = 1.5 , type=float                                       , help = 'Weight for the tv norm loss')
+parser.add_argument('-style_weight'      , default = 0.0001, type=float                                     , help = 'Weight for the style loss')
+parser.add_argument('-content_weight'    , default = 0.05, type=float                                       , help = 'Weight for the content loss')           
+parser.add_argument('-result_shape'      , default = (int(720),int(1280),3)                                 , help = 'Dimensions of stylized result (Height/Width/Color Channels)')
+parser.add_argument('-learning_rate'     , default = 0.025                                                  , help = 'The learning rate to be used when applying gradients')
+parser.add_argument('-style_name'        , default = 'style0'                                               , help = 'Name of the style source')
+parser.add_argument('-content_name'      , default = 'content1'                                             , help = 'Name of the content source')
+args = parser.parse_args()
+
+nameAppend = args.style_name + args.content_name
 ##Global Options##
-contentPath        = '../neural_art/images/testingContent.jpg'
-stylePath          = '../neural_art/images/testingArt.jpg'
+contentPath        = args.content_image_path
+stylePath          = args.style_image_path
 contentLayer       = 'conv4_2'
-styleLayers        = ['conv1_1','conv2_1','conv3_1', 'conv4_1', 'conv5_1']
-styleWeights       = [0.2      ,0.2      , 0.2     , 0.2      , 0.2      ]
+destDir            =  args.save_path
+styleLayers        = args.style_layers
+styleWeights       = args.style_weights
 styleData          = {}
 styleBalanceData   = {}
 contentData        = None
@@ -20,7 +42,7 @@ errorMetricContent = utils.mse #utils.euclidean
 errorMetricStyle   = utils.mse
 normalizeContent   = True #Inversion paper says to use this
 normalizeStyle     = False #No mention of style in inversion paper
-imageShape         = (int(720/2),int(1280/2),3)
+imageShape         = args.result_shape 
 #TODO : Add a real value for sigma. Should be the average euclidean norm of the vgg training images. This also requires an option for the model to change whether or not sigma is multipled by the input image
 sigma = 1.0 #<- if sigma is one then it doesnt need to be included in the vgg net (because the multiplicative identity)
 beta = 2.0
@@ -29,13 +51,13 @@ a = 0.01
 B = 120.0 #Pixel min/max encourages pixels to be in the range of [-B, +B]
 
 alphaNormLossWeight = 0.0001
-TVNormLossWeight    = 1.5
-styleLossWeight     = 0.0001
-contentLossWeight   = 0.05
+TVNormLossWeight    = args.tvnorm_weight
+styleLossWeight     = args.style_weight 
+contentLossWeight   = args.content_weight 
 
-learningRate  = 0.025
-numIters      = 501
-showEveryN   = 500
+learningRate  = args.learning_rate
+numIters      = args.train_iters
+showEveryN    = 500
 ##################
 
 
@@ -154,7 +176,7 @@ def train(model, inputVar, sess):
         if(iteration%showEveryN==0):
             img = inputVar.eval()
             print("Iteration : %s | Loss : %g"%(str(iteration).zfill(4), lossTensor.eval()))
-            utils.showImage(img,imageShape)
+            utils.showImage(img,imageShape, destDir, str(iteration)+nameAppend)
         elif(iteration%10==0):
             print("Iteration : %s | Loss : %g" % (str(iteration).zfill(4), lossTensor.eval()))
 
@@ -168,5 +190,5 @@ with tf.Session() as sess:
     inputVar = tf.Variable(tf.random_uniform((1,)+imageShape, minval=0.25, maxval=0.75))
     model.build(inputVar, imageShape)
     train(model, inputVar, sess)
-    #img =inputVar.eval()
-    #utils.showImage(img, imageShape)
+    img =inputVar.eval()
+    utils.showImage(img,imageShape,  destDir, 'final'+nameAppend)
