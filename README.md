@@ -10,7 +10,7 @@
 
 ##Overview
 
-This project creates art using structures learned by the vgg19 neural network. The algorithm starts with a random uniform distribution of noise which is then updated to become the resulting image. This is done by giving the vgg19 network three seperate inputs: random uniform noise, the style image, and the content image. The activations of the vgg19 network are then compared for each of the given inputs. The loss becomes the sum of these differences. To minimize the loss, we take the deriviative of the loss with respect to the model input. Then the model input (noise) is updated to reflect its contribution to the loss. This process is iterated about 1,500 times for optimal results.
+This project creates art using structures learned by the vgg19 neural network. The algorithm starts with a random uniform distribution of noise which is then updated to become the resulting image. This is done by giving the vgg19 network three seperate inputs: random uniform noise, an image to copy style from, and an image to copy content from. The activations of the vgg19 network are then compared for each of the given inputs. The loss becomes the sum of these differences. To minimize the loss, we take the deriviative of the loss with respect to the model input. Then the model input (noise) is updated to reflect its contribution to the loss. This process is iterated about 1,500 times for optimal results.
 
 
 
