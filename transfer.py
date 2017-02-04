@@ -19,7 +19,7 @@ parser.add_argument('-content_image_path', default = 'images/content1.jpg'      
 parser.add_argument('-style_layers'      , default = ['conv1_2','conv2_2','conv3_3', 'conv4_1', 'conv5_1']  , help = 'Which layers of the vgg network to be used for obtaining style statistics')
 parser.add_argument('-style_weights'     , default = [0.2      ,0.2     , 0.3     , 0.3       , 0.2      ]  , help = 'Weights for the loss between generator result and style image for each layer in the vgg network')
 parser.add_argument('-tvnorm_weight'     , default = 1.5 , type=float                                       , help = 'Weight for the tv norm loss')
-parser.add_argument('-style_weight'      , default = 0.0001, type=float                                     , help = 'Weight for the style loss')
+parser.add_argument('-style_weight'      , default = 0.0003, type=float                                     , help = 'Weight for the style loss')
 parser.add_argument('-content_weight'    , default = 0.05, type=float                                       , help = 'Weight for the content loss')           
 parser.add_argument('-result_shape'      , default = (int(720),int(1280),3)                                 , help = 'Dimensions of stylized result (Height/Width/Color Channels)')
 parser.add_argument('-learning_rate'     , default = 0.025                                                  , help = 'The learning rate to be used when applying gradients')
@@ -27,7 +27,7 @@ parser.add_argument('-style_name'        , default = 'style0'                   
 parser.add_argument('-content_name'      , default = 'content1'                                             , help = 'Name of the content source')
 args = parser.parse_args()
 
-nameAppend = args.style_name + args.content_name
+nameAppend = args.style_name + args.content_name + 'lghs'
 ##Global Options##
 contentPath        = args.content_image_path
 stylePath          = args.style_image_path
