@@ -5,7 +5,6 @@ for i in "${content[@]}"
 do
   for j in "${style[@]}"
    do
-   echo "images/$i$j.jpg"
    python3 transfer.py -style_image_path images/$j.jpg -content_image_path images/$i.jpg -style_name $j -content_name $i
    done
 done
