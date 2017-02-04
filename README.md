@@ -26,7 +26,7 @@ This project creates art using structures learned by the vgg19 neural network. T
  * ``` python3 transfer.py -style_image_path [path to image] -content_image_path [path to image] ```
 * To find out all command line arguments:
  * ``` python3 transfer.py -h ```
-*To duplicate my results exactly:
+* To duplicate my results exactly:
  * Make sure the shell script is executable ```chmod +x batchRun.sh ```
  * Run the script ```./batchRun.sh ```
 
