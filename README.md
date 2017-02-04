@@ -39,7 +39,7 @@ This project creates art using structures learned by the vgg19 neural network. T
 	3. Pillow
 	4. Scipy
 	5. Numpy
-	3. (optional) GPU (<1 min with Titan X pascal, hours on 2014 macbook pro (no gpu)))
+	3. (optional) GPU
 
 
 ###Comparison
