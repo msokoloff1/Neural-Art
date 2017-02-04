@@ -20,8 +20,9 @@ This project creates art using structures learned by the vgg19 neural network. T
 
 
 ###To use:
-1. Download the weights for the trained vgg19 network <a href="https://mega.nz/#!xZ8glS6J!MAnE91ND_WyfZ_8mvkuSa2YcA7q-1ehfSm-Q1fxOvvs">here</a>. Then put them in the root of the project
-2. To run using default settings : ``` python3 transfer.py ``` 
+1. Download the weights for the trained vgg19 network <a href="https://mega.nz/#!xZ8glS6J!MAnE91ND_WyfZ_8mvkuSa2YcA7q-1ehfSm-Q1fxOvvs">here</a>. Then put it in the root of the project.
+2. To run using default settings : 
+ * ``` python3 transfer.py ``` 
 * If you wish to sepcify the content and style images:
  * ``` python3 transfer.py -style_image_path [path to image] -content_image_path [path to image] ```
 * To find out all command line arguments:
